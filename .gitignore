@@ -1,1 +1,4 @@
 /target/
+*.sbe
+*.pem
+.env

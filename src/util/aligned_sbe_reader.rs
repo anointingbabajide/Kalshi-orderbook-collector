@@ -2,8 +2,31 @@
 //! messages written by the
 //! [`AlignedSbeWriter`](crate::util::aligned_sbe_writer::AlignedSbeWriter)
 
-use std::{fs::File, marker::PhantomData, os::unix::fs::FileExt, path::Path};
+use std::{fs::File, marker::PhantomData, path::Path};
 
+#[cfg(unix)]
+use std::os::unix::fs::FileExt;
+#[cfg(windows)]
+use std::os::windows::fs::FileExt;
+
+#[cfg(unix)]
+fn read_exact_at(file: &File, buf: &mut [u8], offset: u64) -> std::io::Result<()> {
+    file.read_exact_at(buf, offset)
+}
+
+#[cfg(windows)]
+fn read_exact_at(file: &File, mut buf: &mut [u8], mut offset: u64) -> std::io::Result<()> {
+    while !buf.is_empty() {
+        let n = file.seek_read(buf, offset)?;
+        if n == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        let tmp = buf;
+        buf = &mut tmp[n..];
+        offset += n as u64;
+    }
+    Ok(())
+}
 use anyhow::Context;
 use crossbeam::channel::{Receiver, Sender, bounded};
 
@@ -134,7 +157,7 @@ impl<T: AlignedSbeSchema> AlignedSbeReader<T> {
                         Err(_) => return,
                     },
                 };
-                if let Err(error) = file.read_exact_at(&mut buffer, file_offset) {
+                if let Err(error) = read_exact_at(&file, &mut buffer, file_offset) {
                     let _ = ready_chunks_tx.send(Err(error));
                     return;
                 }
@@ -190,10 +213,11 @@ impl<T: AlignedSbeSchema> AlignedSbeReader<T> {
             return Ok(false);
         }
 
-        self.file
-            .as_ref()
-            .context("file moved to prefetch task")?
-            .read_exact_at(&mut self.buffer, self.file_offset)?;
+        read_exact_at(
+            self.file.as_ref().context("file moved to prefetch task")?,
+            &mut self.buffer,
+            self.file_offset,
+        )?;
 
         self.file_offset = end;
         self.buffer_pos = 0;
