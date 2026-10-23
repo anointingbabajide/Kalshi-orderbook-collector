@@ -2,3 +2,4 @@
 *.sbe
 *.pem
 .env
+/.vscode
