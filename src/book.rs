@@ -14,7 +14,6 @@ pub enum Side {
     Yes,
     No,
 }
-
 /// Parse a decimal string like "0.0100", "500.00" or "-12.5" into 1e6 fixed
 /// point without going through floats. Returns None on bad input or if the
 /// value has more than 6 non-zero decimals.
